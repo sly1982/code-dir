@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>CIMAF – Mission Durabilité</title>
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:Arial,sans-serif}
+body{background:#000;color:#fff;overflow:hidden}
+
+/* Matrix background */
+canvas{position:fixed;top:0;left:0;z-index:0}
+
+/* Layout */
+#app{position:relative;z-index:2;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px}
+
+/* Header */
+header{position:absolute;top:20px;text-align:center}
+header h1{font-size:34px;font-weight:700}
+header h2{font-size:18px;color:orange}
+
+/* Panel */
+#panel{
+  background:rgba(0,0,0,.75);
+  border:2px solid orange;
+  border-radius:12px;
+  padding:22px;
+  width:min(360px,92vw);
+  text-align:center
+}
+
+/* Display */
+#display{
+  font-size:18px;
+  border:1px solid orange;
+  border-radius:8px;
+  padding:12px 10px;
+  min-height:46px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  letter-spacing:.5px;
+  margin-bottom:16px
+}
+.pill{
+  border:1px solid rgba(255,165,0,.65);
+  padding:6px 10px;
+  border-radius:999px;
+  font-weight:700;
+  font-size:14px;
+  color:#fff;
+  background:rgba(255,165,0,.08)
+}
+
+/* Arrow pad */
+.pad{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:10px;
+  margin-top:6px
+}
+.key{
+  padding:16px 10px;
+  font-size:18px;
+  border:1px solid orange;
+  background:#111;
+  color:#fff;
+  border-radius:10px;
+  cursor:pointer;
+  transition:all .15s ease
+}
+.key:hover{background:orange;color:#000}
+.key:active{transform:scale(.98)}
+
+.empty{visibility:hidden}
+
+/* Controls row */
+.controls{
+  display:flex;
+  gap:10px;
+  margin-top:12px
+}
+.ctrl{
+  flex:1;
+  padding:12px 10px;
+  font-size:14px;
+  border:1px solid rgba(255,165,0,.9);
+  background:rgba(0,0,0,.55);
+  color:#fff;
+  border-radius:10px;
+  cursor:pointer
+}
+.ctrl:hover{background:rgba(255,165,0,.18)}
+.ctrl.danger{border-color:rgba(255,80,80,.9)}
+.ctrl.danger:hover{background:rgba(255,80,80,.12)}
+
+/* Feedback */
+#feedback{margin-top:14px;font-size:20px;font-weight:700;min-height:26px}
+.correct{color:#00ff66}
+.wrong{color:red}
+
+/* Responsive */
+@media (max-width:420px){
+  header h1{font-size:28px}
+  header h2{font-size:16px}
+  .key{padding:14px 8px}
+}
+</style>
+</head>
+
+<body>
+<canvas id="matrix"></canvas>
+
+<div id="app">
+  <header>
+    <h1>CIMAF</h1>
+    <h2>Mission Durabilité</h2>
+  </header>
+
+  <div id="panel">
+    <div id="display">
+      <span id="hint">Entrez la séquence directionnelle</span>
+    </div>
+
+    <div class="pad">
+      <div class="empty"></div>
+      <button class="key" onclick="press('HAUT')" aria-label="Haut">↑</button>
+      <div class="empty"></div>
+
+      <button class="key" onclick="press('GAUCHE')" aria-label="Gauche">←</button>
+      <button class="key" onclick="press('BAS')" aria-label="Bas">↓</button>
+      <button class="key" onclick="press('DROITE')" aria-label="Droite">→</button>
+
+      <div class="empty"></div>
+      <div class="empty"></div>
+      <div class="empty"></div>
+    </div>
+
+    <div class="controls">
+      <button class="ctrl" onclick="backspace()">Effacer 1</button>
+      <button class="ctrl danger" onclick="resetAll()">Reset</button>
+    </div>
+
+    <div id="feedback"></div>
+  </div>
+</div>
+
+<script>
+/* MATRIX EFFECT (orange) */
+const canvas = document.getElementById("matrix");
+const ctx = canvas.getContext("2d");
+function resizeCanvas(){
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resizeCanvas();
+window.addEventListener("resize", resizeCanvas);
+
+const chars = "01▲■";
+const fontSize = 16;
+let drops = [];
+function initDrops(){
+  const columns = Math.floor(canvas.width / fontSize);
+  drops = Array(columns).fill(1);
+}
+initDrops();
+window.addEventListener("resize", initDrops);
+
+function drawMatrix(){
+  ctx.fillStyle = "rgba(0,0,0,0.05)";
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle = "orange";
+  ctx.font = fontSize + "px monospace";
+
+  for(let i=0;i<drops.length;i++){
+    const text = chars[Math.floor(Math.random()*chars.length)];
+    ctx.fillText(text, i*fontSize, drops[i]*fontSize);
+    if(drops[i]*fontSize > canvas.height && Math.random() > 0.98) drops[i]=0;
+    drops[i]++;
+  }
+}
+setInterval(drawMatrix, 50);
+
+/* DIRECTION CODE LOGIC */
+const correctSeq = ["BAS","DROITE","GAUCHE","DROITE","BAS"];
+const maxLen = correctSeq.length;
+
+let input = [];
+const display = document.getElementById("display");
+const feedback = document.getElementById("feedback");
+
+function renderDisplay(){
+  display.innerHTML = "";
+  if(input.length === 0){
+    const span = document.createElement("span");
+    span.id = "hint";
+    span.textContent = "Entrez la séquence directionnelle";
+    display.appendChild(span);
+    return;
+  }
+  input.forEach(dir=>{
+    const pill = document.createElement("span");
+    pill.className = "pill";
+    pill.textContent = dir;
+    display.appendChild(pill);
+  });
+}
+
+function lockPad(lock){
+  document.querySelectorAll(".key").forEach(b=>b.disabled = lock);
+  document.querySelectorAll(".ctrl").forEach(b=>b.disabled = lock);
+}
+
+function press(dir){
+  if(input.length >= maxLen) return;
+  input.push(dir);
+  renderDisplay();
+  feedback.textContent = "";
+  feedback.className = "";
+
+  if(input.length === maxLen){
+    const ok = input.every((v, idx) => v === correctSeq[idx]);
+    if(ok){
+      feedback.textContent = "CORRECT";
+      feedback.className = "correct";
+      lockPad(true);
+    }else{
+      feedback.textContent = "RÉESSAYER";
+      feedback.className = "wrong";
+      setTimeout(()=>{ resetAll(true); }, 900);
+    }
+  }
+}
+
+function backspace(){
+  if(input.length === 0) return;
+  input.pop();
+  renderDisplay();
+  feedback.textContent = "";
+  feedback.className = "";
+}
+
+function resetAll(soft=false){
+  input = [];
+  renderDisplay();
+  if(!soft){
+    feedback.textContent = "";
+    feedback.className = "";
+  }else{
+    // keep feedback visible until next interaction
+    setTimeout(()=>{
+      feedback.textContent = "";
+      feedback.className = "";
+    }, 200);
+  }
+}
+
+renderDisplay();
+</script>
+</body>
+</html>
